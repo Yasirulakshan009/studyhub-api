@@ -5,6 +5,7 @@ import express, { type Request, type Response } from "express"
 import mongoose from "mongoose"
 import cors from "cors"
 import AuthRouter from "./routes/auth.routers"
+import AdminRouter from "./routes/admin.routes"
 import dotenv from "dotenv"
 dotenv.config()
 
@@ -21,6 +22,7 @@ app.get("/api/v1/health", (_req: Request, res: Response) => {
 })
 
 app.use("/api/v1/auth", AuthRouter)
+app.use("/api/v1/admin", AdminRouter)
 
 mongoose
   .connect(MONGO_URL)
