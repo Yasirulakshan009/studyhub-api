@@ -1,9 +1,8 @@
 import { Request, Response } from "express"
 import bcrypt from "bcryptjs"
-import { UserModel } from "../models/user.model"
+import { UserModel, UserRole } from "../models/user.model"
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../util/jwt"
 import { AuthRequest } from "../middleware/auth"
-import { UserModel, UserRole } from "../models/user.model"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
