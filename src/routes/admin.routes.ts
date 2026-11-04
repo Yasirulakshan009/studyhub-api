@@ -5,7 +5,7 @@ import { UserRole } from "../models/user.model"
 
 const router = Router()
 
-router.get("/ping", authenticate, requireRole(UserRole.ADMIN), (req: AuthRequest, res: Response) => {
+router.get("/ping", authenticate, requireRole([UserRole.ADMIN]), (req: AuthRequest, res: Response) => {
     res.status(200).json({ message: "Welcome admin", userId: req.user?.sub })
 })
 

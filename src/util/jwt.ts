@@ -4,6 +4,10 @@ import jwt, { JwtPayload } from "jsonwebtoken"
 const JWT_SECRET = process.env.JWT_SECRET as string
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || JWT_SECRET
 
+if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
+  throw new Error("JWT_SECRET and JWT_REFRESH_SECRET must be set in .env")
+}
+
 export interface AuthPayload extends JwtPayload {
   sub: string
   roles?: string[]

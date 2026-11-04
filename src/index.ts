@@ -1,7 +1,7 @@
 import dns from "node:dns"
 dns.setServers(["8.8.8.8", "1.1.1.1"])
 
-import express, { type Request, type Response } from "express"
+import express, { type NextFunction, type Request, type Response } from "express"
 import mongoose from "mongoose"
 import cors from "cors"
 import AuthRouter from "./routes/auth.routers"
@@ -23,6 +23,18 @@ app.get("/api/v1/health", (_req: Request, res: Response) => {
 
 app.use("/api/v1/auth", AuthRouter)
 app.use("/api/v1/admin", AdminRouter)
+
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({ message: "Route not found" })
+})
+
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  if (err?.type === "entity.parse.failed") {
+      return res.status(400).json({ message: "Invalid JSON body" })
+  }
+  console.error(err)
+  res.status(500).json({ message: "Internal server error" })
+})
 
 mongoose
   .connect(MONGO_URL)
