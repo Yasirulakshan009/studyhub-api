@@ -1,0 +1,51 @@
+import { Request, Response } from "express"
+import mongoose from "mongoose"
+import { CategoryModel } from "../models/category.model"
+
+export const createCategory = async (req: Request, res: Response) => {
+    try {
+        const { name, description, parentId } = req.body
+
+        if (typeof name !== "string" || name.trim().length < 2 || name.trim().length > 50) {
+            return res.status(400).json({ message: "Name must be 2-50 characters" })
+        }
+
+        if (description !== undefined && (typeof description !== "string" || description.length > 300)) {
+            return res.status(400).json({ message: "Description must be at most 300 characters" })
+        }
+
+        let parent = null
+        if (parentId !== undefined && parentId !== null) {
+            if (!mongoose.isValidObjectId(parentId)) {
+                return res.status(400).json({ message: "Invalid parent category id" })
+            }
+
+            parent = await CategoryModel.findById(parentId)
+            if (!parent) {
+                return res.status(404).json({ message: "Parent category not found" })
+            }
+            if (parent.parentId) {
+                return res.status(400).json({ message: "A sub-category cannot have its own sub-categories" })
+            }
+        }
+
+        const exists = await CategoryModel.findOne({ name: name.trim(), parentId: parent ? parent._id : null })
+        if (exists) {
+            return res.status(409).json({ message: "Category already exists" })
+        }
+
+        const category = await CategoryModel.create({
+            name: name.trim(),
+            description,
+            parentId: parent ? parent._id : null
+        })
+
+        res.status(201).json({ message: "Category created successfully", data: category })
+    } catch (error: any) {
+        if (error?.code === 11000) {
+            return res.status(409).json({ message: "Category already exists" })
+        }
+        console.error(error)
+        res.status(500).json({ message: "Failed to create category" })
+    }
+}
