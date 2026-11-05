@@ -49,3 +49,45 @@ export const createCategory = async (req: Request, res: Response) => {
         res.status(500).json({ message: "Failed to create category" })
     }
 }
+
+export const getCategories = async (req: Request, res: Response) => {
+    try {
+        const { parentId } = req.query
+
+        let filter: { isActive: boolean; parentId: any } = { isActive: true, parentId: null }
+
+        if (parentId !== undefined) {
+            if (typeof parentId !== "string" || !mongoose.isValidObjectId(parentId)) {
+                return res.status(400).json({ message: "Invalid parent category id" })
+            }
+            filter.parentId = parentId
+        }
+
+        const categories = await CategoryModel.find(filter).sort({ name: 1 })
+
+        res.status(200).json({ message: "Categories loaded successfully", data: categories })
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ message: "Failed to load categories" })
+    }
+}
+
+export const getCategoryById = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params
+
+        if (!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid category id" })
+        }
+
+        const category = await CategoryModel.findById(id)
+        if (!category) {
+            return res.status(404).json({ message: "Category not found" })
+        }
+
+        res.status(200).json({ message: "Category loaded successfully", data: category })
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ message: "Failed to load category" })
+    }
+}
