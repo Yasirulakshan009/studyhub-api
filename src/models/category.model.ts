@@ -5,16 +5,18 @@ export interface ICategory extends Document {
     description?: string
     parentId: Types.ObjectId | null
     isActive: boolean
+    isSystem: boolean
     createdAt: Date
     updatedAt: Date
 }
 
 const categorySchema = new Schema<ICategory>(
     {
-        name: { type: String, required: true, unique: true, trim: true, minlength: 2, maxlength: 50 },
+        name: { type: String, required: true, trim: true, minlength: 2, maxlength: 50 },
         description: { type: String, trim: true, maxlength: 300 },
-        parentId: { type: Schema.Types.ObjectId, ref: "categories", default: null },
-        isActive: { type: Boolean, default: true }
+        parentId: { type: Schema.Types.ObjectId, ref: "category", default: null },
+        isActive: { type: Boolean, default: true },
+        isSystem: { type: Boolean, default: false }
     },
     { timestamps: true }
 )

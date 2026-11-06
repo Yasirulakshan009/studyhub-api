@@ -134,7 +134,7 @@ export const updateMyProfile = async (req: AuthRequest, res: Response) => {
         const wantsEmail = email !== undefined
         const wantsPassword = newPassword !== undefined
 
-        if (!wantsName && !wantsEmail && wantsPassword) {
+        if (!wantsName && !wantsEmail && !wantsPassword) {
             return res.status(400).json({ message: "Nothing to update" })
         }
 

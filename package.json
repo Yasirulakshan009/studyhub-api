@@ -7,7 +7,8 @@
     "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "seed:admin": "tsx --env-file=.env src/scripts/seedAdmin.ts"
+    "seed:admin": "tsx --env-file=.env src/scripts/seedAdmin.ts",
+    "seed:categories": "tsx --env-file=.env src/scripts/seedCategories.ts"
   },
   "keywords": [],
   "author": "",
