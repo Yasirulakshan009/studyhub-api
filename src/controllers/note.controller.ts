@@ -5,6 +5,7 @@ import { CategoryModel } from "../models/category.model"
 import { UserRole } from "../models/user.model"
 import { AuthRequest } from "../middleware/auth"
 import { parseNoteFields } from "../validators/note.validator"
+import { saveNoteFile, deleteNoteFile, createDownloadUrl, type StoredFile } from "../services/storage.service"
 
 const getPagination = (query: any, defaultLimit: number) => {
     const page = Math.max(parseInt(String(query.page ?? "1"), 10) || 1, 1)
@@ -13,13 +14,24 @@ const getPagination = (query: any, defaultLimit: number) => {
 }
 
 export const createNote = async (req: AuthRequest, res: Response) => {
+    let storedFile: StoredFile | null = null
+
     try {
         const userId = req.user?.sub
         if (!userId) {
             return res.status(401).json({ message: "Unauthorized" })
         }
 
-        const { data, error } = parseNoteFields(req.body, "create")
+        if (!req.file) {
+            return res.status(400).json({ message: "A PDF file is required" })
+        }
+
+        const body = { ...req.body }
+        if (typeof body.tags === "string") {
+            body.tags = body.tags.split(",").map((t: string) => t.trim()).filter(Boolean)
+        }
+
+        const { data, error } = parseNoteFields(body, "create")
         if (error || !data) {
             return res.status(400).json({ message: error })
         }
@@ -29,17 +41,32 @@ export const createNote = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: "Category not found or inactive" })
         }
 
+        storedFile = await saveNoteFile(req.file, userId)
+
         const note = await NoteModel.create({
             title: data.title,
             description: data.description,
             subject: data.subject || undefined,
             tags: data.tags ?? [],
             categoryId: category._id,
-            uploaderId: userId
+            uploaderId: userId,
+            file: storedFile
         })
 
         res.status(201).json({ message: "Note submitted for review", data: note })
-    } catch (error) {
+    } catch (error: any) {
+        if (storedFile) {
+            try {
+                await deleteNoteFile(storedFile.storageKey)
+            } catch (cleanupError) {
+                console.error(cleanupError)
+            }
+        }
+
+        if (error?.message === "INVALID_PDF") {
+            return res.status(400).json({ message: "File is not a valid PDF" })
+        }
+
         console.error(error)
         res.status(500).json({ message: "Failed to create note" })
     }
@@ -143,7 +170,17 @@ export const deleteNote = async (req: AuthRequest, res: Response) => {
             return res.status(403).json({ message: "You can only modify your own notes" })
         }
 
+        const storageKey = note.file?.storageKey
+
         await note.deleteOne()
+
+        if (storageKey) {
+            try {
+                await deleteNoteFile(storageKey)
+            } catch (cleanupError) {
+                console.error("Failed to remove file from storage:", cleanupError)
+            }
+        }
 
         res.status(200).json({ message: "Note deleted successfully" })
     } catch (error) {
@@ -318,5 +355,43 @@ export const getNoteById = async (req: Request, res: Response) => {
     } catch (error) {
         console.error(error)
         res.status(500).json({ message: "Failed to load note" })
+    }
+}
+
+export const downloadNote = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.sub
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized" })
+        }
+
+        const { id } = req.params
+        if (typeof id !== "string" || !mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid note id" })
+        }
+
+        const note = await NoteModel.findById(id)
+        if (!note || !note.file) {
+            return res.status(404).json({ message: "Note not found" })
+        }
+
+        const isAdmin = req.user?.roles?.includes(UserRole.ADMIN) ?? false
+        const isOwner = note.uploaderId.toString() === userId
+        const isApproved = note.status === NoteStatus.APPROVED
+
+        if (!isApproved && !isOwner && !isAdmin) {
+            return res.status(404).json({ message: "Note not found" })
+        }
+
+        const url = await createDownloadUrl(note.file.storageKey, note.file.originalName)
+
+        if (isApproved) {
+            await NoteModel.updateOne({ _id: note._id }, { $inc: { downloadCount: 1 } })
+        }
+
+        res.status(200).json({ message: "OK", data: { url, expiresInSeconds: 60 } })
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ message: "Failed to prepare download" })
     }
 }
