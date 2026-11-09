@@ -1,6 +1,7 @@
 import { Request, Response } from "express"
 import mongoose from "mongoose"
 import { CategoryModel } from "../models/category.model"
+import { NoteModel } from "../models/note.model"
 
 export const createCategory = async (req: Request, res: Response) => {
     try {
@@ -177,6 +178,11 @@ export const deleteCategory = async (req: Request, res: Response) => {
         const subCount = await CategoryModel.countDocuments({ parentId: category._id })
         if (subCount > 0) {
             return res.status(409).json({ message: "Delete the sub-categories first" })
+        }
+
+        const noteCount = await NoteModel.countDocuments({ categoryId: category._id })
+        if (noteCount > 0) {
+            return res.status(409).json({ message: "This category has notes. Move or delete them first" })
         }
 
         await category.deleteOne()
