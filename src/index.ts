@@ -1,5 +1,10 @@
+import dotenv from "dotenv"
+dotenv.config()
+
 import dns from "node:dns"
-dns.setServers(["8.8.8.8", "1.1.1.1"])
+if (process.env.USE_CUSTOM_DNS === "true") {
+  dns.setServers(["8.8.8.8", "1.1.1.1"])
+}
 
 import express, { type NextFunction, type Request, type Response } from "express"
 import mongoose from "mongoose"
@@ -8,8 +13,7 @@ import AuthRouter from "./routes/auth.routers"
 import AdminRouter from "./routes/admin.routes"
 import categoryRouter from "./routes/category.routes"
 import NoteRouter from "./routes/note.routes"
-import dotenv from "dotenv"
-dotenv.config()
+
 
 const MONGO_URL = process.env.MONGO_URL || ""
 const PORT = process.env.PORT || 5000
