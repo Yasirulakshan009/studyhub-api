@@ -25,6 +25,7 @@ export interface INote extends Document {
     status: NoteStatus
     rejectionReason?: string
     downloadCount: number
+    ownershipConfirmed: boolean
     aiSummary?: string
     createdAt: Date
     updatedAt: Date
@@ -60,6 +61,7 @@ const noteSchema = new Schema<INote>(
         status: { type: String, enum: Object.values(NoteStatus), default: NoteStatus.PENDING },
         rejectionReason: { type: String, trim: true, maxlength: 300 },
         downloadCount: { type: Number, default: 0, min: 0 },
+        ownershipConfirmed: { type: Boolean, default: false },
         aiSummary: { type: String }
     },
     { timestamps: true }

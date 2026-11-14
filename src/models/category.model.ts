@@ -14,7 +14,7 @@ const categorySchema = new Schema<ICategory>(
     {
         name: { type: String, required: true, trim: true, minlength: 2, maxlength: 50 },
         description: { type: String, trim: true, maxlength: 300 },
-        parentId: { type: Schema.Types.ObjectId, ref: "category", default: null },
+        parentId: { type: Schema.Types.ObjectId, ref: "Category", default: null },
         isActive: { type: Boolean, default: true },
         isSystem: { type: Boolean, default: false }
     },

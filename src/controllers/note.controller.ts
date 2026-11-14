@@ -26,6 +26,12 @@ export const createNote = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: "A PDF file is required" })
         }
 
+        if (req.body.ownershipConfirmed !== "true") {
+            return res.status(400).json({
+                message: "You must confirm that you own this note or have permission to share it"
+            })
+        }
+
         const body = { ...req.body }
         if (typeof body.tags === "string") {
             body.tags = body.tags.split(",").map((t: string) => t.trim()).filter(Boolean)
@@ -50,6 +56,7 @@ export const createNote = async (req: AuthRequest, res: Response) => {
             tags: data.tags ?? [],
             categoryId: category._id,
             uploaderId: userId,
+            ownershipConfirmed: true,
             file: storedFile
         })
 
@@ -385,7 +392,7 @@ export const downloadNote = async (req: AuthRequest, res: Response) => {
 
         const url = await createDownloadUrl(note.file.storageKey, note.file.originalName)
 
-        if (isApproved) {
+        if (isApproved && req.query.preview !== "true") {
             await NoteModel.updateOne({ _id: note._id }, { $inc: { downloadCount: 1 } })
         }
 

@@ -38,7 +38,7 @@ export const register = async (req: Request, res: Response) => {
             password: hashedPassword
         })
 
-        res.status(201).json({ message: "User registerd successfully" })
+        res.status(201).json({ message: "User registered successfully" })
 
     } catch (error: any) {
         if (error?.code === 11000) {
