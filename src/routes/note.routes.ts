@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { createNote, getMyNotes, updateNote, deleteNote, listNotes, getNoteById, downloadNote } from "../controllers/note.controller"
+import { createNote, getMyNotes, updateNote, deleteNote, listNotes, getNoteById, downloadNote, summarizeNote } from "../controllers/note.controller"
 import { authenticate } from "../middleware/auth"
 import { uploadPdf } from "../middleware/upload"
 
@@ -12,5 +12,6 @@ router.get("/:id", getNoteById)
 router.put("/:id", authenticate, updateNote)
 router.delete("/:id", authenticate, deleteNote)
 router.get("/:id/download", authenticate, downloadNote)
+router.post("/:id/summary", authenticate, summarizeNote)
 
 export default router

@@ -64,3 +64,17 @@ export const createDownloadUrl = async (storageKey: string, originalName: string
 
     return data.signedUrl
 }
+
+export const downloadNoteFile = async (storageKey: string): Promise<Buffer> => {
+    const { data, error } = await getSupabase()
+        .storage
+        .from(getBucketName())
+        .download(storageKey)
+
+    if (error || !data) {
+        console.error(error)
+        throw new Error("STORAGE_DOWNLOAD_FAILED")
+    }
+
+    return Buffer.from(await data.arrayBuffer())
+}

@@ -5,7 +5,9 @@ import { CategoryModel } from "../models/category.model"
 import { UserRole } from "../models/user.model"
 import { AuthRequest } from "../middleware/auth"
 import { parseNoteFields } from "../validators/note.validator"
-import { saveNoteFile, deleteNoteFile, createDownloadUrl, type StoredFile } from "../services/storage.service"
+import { saveNoteFile, deleteNoteFile, createDownloadUrl, downloadNoteFile, type StoredFile } from "../services/storage.service"
+import { summarizePdf } from "../services/ai.service"
+import { allowRequest } from "../util/rateLimit"
 
 const getPagination = (query: any, defaultLimit: number) => {
     const page = Math.max(parseInt(String(query.page ?? "1"), 10) || 1, 1)
@@ -400,5 +402,79 @@ export const downloadNote = async (req: AuthRequest, res: Response) => {
     } catch (error) {
         console.error(error)
         res.status(500).json({ message: "Failed to prepare download" })
+    }
+}
+
+const summaryInFlight = new Map<string, Promise<string>>()
+
+export const summarizeNote = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.sub
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized" })
+        }
+
+        const { id } = req.params
+        if (typeof id !== "string" || !mongoose.isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid note id" })
+        }
+
+        const note = await NoteModel.findOne({ _id: id, status: NoteStatus.APPROVED })
+        if (!note || !note.file) {
+            return res.status(404).json({ message: "Note not found" })
+        }
+
+        if (note.aiSummary) {
+            return res.status(200).json({
+                message: "OK",
+                data: { summary: note.aiSummary, cached: true }
+            })
+        }
+
+        if (!allowRequest(`summary:${userId}`, 3, 60_000)) {
+            return res.status(429).json({
+                message: "You are asking for summaries too quickly. Please wait a minute and try again."
+            })
+        }
+
+        const storageKey = note.file.storageKey
+
+        let pending = summaryInFlight.get(id)
+        if (!pending) {
+            pending = (async () => {
+                const pdf = await downloadNoteFile(storageKey)
+                const result = await summarizePdf(pdf)
+                await NoteModel.updateOne(
+                    { _id: note._id },
+                    { $set: { aiSummary: result.text } },
+                    { timestamps: false }
+                )
+                return result.text
+            })().finally(() => summaryInFlight.delete(id))
+
+            summaryInFlight.set(id, pending)
+        }
+
+        const summary = await pending
+        res.status(200).json({ message: "OK", data: { summary, cached: false } })
+    } catch (error) {
+        const code = error instanceof Error ? error.message : ""
+
+        if (code === "AI_BUSY") {
+            return res.status(429).json({
+                message: "The AI service is busy right now. Please try again in a minute."
+            })
+        }
+        if (code === "AI_NOT_CONFIGURED" || code === "AI_UNAVAILABLE" || code === "AI_EMPTY") {
+            return res.status(503).json({
+                message: "Summaries are not available right now. Please try again later."
+            })
+        }
+        if (code === "STORAGE_DOWNLOAD_FAILED") {
+            return res.status(502).json({ message: "Could not read the PDF file" })
+        }
+
+        console.error(error)
+        res.status(500).json({ message: "Failed to generate summary" })
     }
 }
