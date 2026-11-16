@@ -22,6 +22,7 @@ const app = express()
 
 app.use(cors())
 app.use(express.json())
+app.set("trust proxy", 1)
 
 app.get("/api/v1/health", (_req: Request, res: Response) => {
   res.status(200).json({ message: "StudyHub API is running..!" })

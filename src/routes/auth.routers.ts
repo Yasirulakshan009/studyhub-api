@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { register, registerAdmin, login, refresh, me, updateMyProfile } from "../controllers/auth.controller"
+import { register, registerAdmin, login, refresh, me, updateMyProfile, forgotPassword, resetPassword } from "../controllers/auth.controller"
 import { authenticate } from "../middleware/auth"
 import { requireRole } from "../middleware/role"
 import { UserRole } from "../models/user.model"
@@ -12,5 +12,7 @@ router.post("/login", login)
 router.post("/refresh", refresh)
 router.get("/me", authenticate, me)
 router.put("/me", authenticate, updateMyProfile)
+router.post("/forgot-password", forgotPassword)
+router.post("/reset-password", resetPassword)
 
 export default router

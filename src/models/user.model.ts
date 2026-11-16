@@ -10,6 +10,8 @@ export interface IUser extends Document {
     email: string
     password: string
     roles: UserRole[]
+    passwordResetTokenHash?: string
+    passwordResetExpires?: Date
 }
 
 const userSchema = new Schema<IUser>(
@@ -21,9 +23,13 @@ const userSchema = new Schema<IUser>(
           type: [String],
           enum: Object.values(UserRole),
           default: [UserRole.STUDENT]
-        }
+        },
+        passwordResetTokenHash: { type: String, select: false },
+        passwordResetExpires: { type: Date, select: false }
     },
     { timestamps: true}    
 )
+
+userSchema.index({ passwordResetTokenHash: 1 }, { sparse: true })
  
 export const UserModel = model<IUser>("users", userSchema)
