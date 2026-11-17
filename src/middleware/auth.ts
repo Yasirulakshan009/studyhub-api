@@ -1,3 +1,4 @@
+
 import { NextFunction, Request, Response } from "express"
 import { verifyAccessToken, AuthPayload } from "../util/jwt"
 
@@ -5,7 +6,11 @@ export interface AuthRequest extends Request {
     user?: AuthPayload
 }
 
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authenticate = (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+) => {
     const header = req.headers.authorization
 
     if (!header?.startsWith("Bearer ")) {
@@ -16,6 +21,25 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
         req.user = verifyAccessToken(header.split(" ")[1])
         next()
     } catch (error) {
-        res.status(401).json({ message: "Invalid or expired token" })
+        return res.status(401).json({ message: "Invalid or expired token" })
     }
+}
+
+export const optionalAuthenticate = (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+) => {
+    const header = req.headers.authorization
+
+    if (!header?.startsWith("Bearer ")) {
+        return next()
+    }
+
+    try {
+        req.user = verifyAccessToken(header.split(" ")[1])
+    } catch {
+    }
+
+    next()
 }

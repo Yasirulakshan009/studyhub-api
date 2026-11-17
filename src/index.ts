@@ -14,6 +14,7 @@ import AdminRouter from "./routes/admin.routes"
 import categoryRouter from "./routes/category.routes"
 import NoteRouter from "./routes/note.routes"
 import userRoutes from "./routes/user.routes"
+import likeRoutes from "./routes/like.routes"
 
 
 const MONGO_URL = process.env.MONGO_URL || ""
@@ -34,6 +35,7 @@ app.use("/api/v1/admin", AdminRouter)
 app.use("/api/v1/categories", categoryRouter)
 app.use("/api/v1/notes", NoteRouter) 
 app.use("/api/v1/users", userRoutes)
+app.use("/api/v1/likes", likeRoutes)
 
 
 app.use((_req: Request, res: Response) => {

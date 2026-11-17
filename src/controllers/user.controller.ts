@@ -1,8 +1,10 @@
 
 import { Request, Response } from "express"
 import mongoose from "mongoose"
+import { AuthRequest } from "../middleware/auth"
 import { UserModel } from "../models/user.model"
 import { NoteModel, NoteStatus } from "../models/note.model"
+import { LikeModel } from "../models/like.model"
 
 export const getPublicUserProfile = async (req: Request, res: Response) => {
     try {
@@ -36,7 +38,7 @@ export const getPublicUserProfile = async (req: Request, res: Response) => {
             status: NoteStatus.APPROVED
         }
 
-        const [items, total] = await Promise.all([
+        const [items, total, allNoteIds] = await Promise.all([
             NoteModel.find(filter)
                 .select("-rejectionReason -file.storageKey")
                 .sort({ createdAt: -1 })
@@ -45,20 +47,75 @@ export const getPublicUserProfile = async (req: Request, res: Response) => {
                 .populate("categoryId", "name")
                 .populate("uploaderId", "name avatarUrl"),
 
-            NoteModel.countDocuments(filter)
+            NoteModel.countDocuments(filter),
+
+            NoteModel.distinct("_id", filter)
         ])
 
-        res.status(200).json({
+        const userId = (req as AuthRequest).user?.sub
+        const pageNoteIds = items.map((note) => note._id)
+
+        const [likeCounts, userLikes] = await Promise.all([
+            LikeModel.aggregate([
+                {
+                    $match: {
+                        noteId: { $in: allNoteIds }
+                    }
+                },
+                {
+                    $group: {
+                        _id: "$noteId",
+                        totalLikes: { $sum: 1 }
+                    }
+                }
+            ]),
+
+            userId && pageNoteIds.length > 0
+                ? LikeModel.find({
+                    noteId: { $in: pageNoteIds },
+                    userId
+                }).select("noteId")
+                : Promise.resolve([])
+        ])
+
+        const likeCountMap = new Map(
+            likeCounts.map((item) => [
+                item._id.toString(),
+                item.totalLikes
+            ])
+        )
+
+        const likedNoteIds = new Set(
+            userLikes.map((like) => like.noteId.toString())
+        )
+
+        const totalLikes = likeCounts.reduce(
+            (sum, item) => sum + item.totalLikes,
+            0
+        )
+
+        const notesWithLikes = items.map((note) => {
+            const noteId = note._id.toString()
+
+            return {
+                ...note.toObject(),
+                totalLikes: likeCountMap.get(noteId) ?? 0,
+                isLiked: likedNoteIds.has(noteId)
+            }
+        })
+
+        return res.status(200).json({
             message: "OK",
             data: {
                 user: {
                     id: user._id,
                     name: user.name,
                     roles: user.roles,
-                    avatarUrl: user.avatarUrl ?? null
+                    avatarUrl: user.avatarUrl ?? null,
+                    totalLikes
                 },
                 notes: {
-                    items,
+                    items: notesWithLikes,
                     page,
                     limit,
                     total,
@@ -68,6 +125,8 @@ export const getPublicUserProfile = async (req: Request, res: Response) => {
         })
     } catch (error) {
         console.error(error)
-        res.status(500).json({ message: "Failed to load public profile" })
+        return res.status(500).json({
+            message: "Failed to load public profile"
+        })
     }
 }

@@ -8,6 +8,7 @@ import { parseNoteFields } from "../validators/note.validator"
 import { saveNoteFile, deleteNoteFile, createDownloadUrl, downloadNoteFile, type StoredFile } from "../services/storage.service"
 import { summarizePdf } from "../services/ai.service"
 import { allowRequest } from "../util/rateLimit"
+import { LikeModel } from "../models/like.model"
 
 const getPagination = (query: any, defaultLimit: number) => {
     const page = Math.max(parseInt(String(query.page ?? "1"), 10) || 1, 1)
@@ -81,19 +82,75 @@ export const createNote = async (req: AuthRequest, res: Response) => {
     }
 }
 
+
 export const getMyNotes = async (req: AuthRequest, res: Response) => {
     try {
-        const notes = await NoteModel.find({ uploaderId: req.user?.sub })
+        const userId = req.user?.sub
+
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized" })
+        }
+
+        const notes = await NoteModel.find({ uploaderId: userId })
             .populate("categoryId", "name")
             .sort({ createdAt: -1 })
             .limit(100)
 
-        res.status(200).json({ message: "OK", data: notes })
+        const noteIds = notes.map((note) => note._id)
+
+        const [likeCounts, likedNoteIds] = await Promise.all([
+            LikeModel.aggregate([
+                {
+                    $match: {
+                        noteId: { $in: noteIds }
+                    }
+                },
+                {
+                    $group: {
+                        _id: "$noteId",
+                        totalLikes: { $sum: 1 }
+                    }
+                }
+            ]),
+            LikeModel.distinct("noteId", {
+                noteId: { $in: noteIds },
+                userId
+            })
+        ])
+
+        const likeCountMap = new Map(
+            likeCounts.map((item) => [
+                item._id.toString(),
+                item.totalLikes
+            ])
+        )
+
+        const likedSet = new Set(
+            likedNoteIds.map((id) => id.toString())
+        )
+
+        const notesWithLikes = notes.map((note) => {
+            const noteId = note._id.toString()
+
+            return {
+                ...note.toObject(),
+                totalLikes: likeCountMap.get(noteId) ?? 0,
+                isLiked: likedSet.has(noteId)
+            }
+        })
+
+        return res.status(200).json({
+            message: "OK",
+            data: notesWithLikes
+        })
     } catch (error) {
         console.error(error)
-        res.status(500).json({ message: "Failed to load your notes" })
+        return res.status(500).json({
+            message: "Failed to load your notes"
+        })
     }
 }
+
 
 export const updateNote = async (req: AuthRequest, res: Response) => {
     try {
@@ -279,6 +336,7 @@ export const reviewNote = async (req: AuthRequest, res: Response) => {
     }
 }
 
+
 export const listNotes = async (req: Request, res: Response) => {
     try {
         const { q, categoryId, sort } = req.query
@@ -302,17 +360,25 @@ export const listNotes = async (req: Request, res: Response) => {
                 return res.status(400).json({ message: "Invalid categoryId" })
             }
 
-            const children = await CategoryModel.find({ parentId: categoryId, isActive: true }).select("_id")
-            filter.categoryId = { $in: [categoryId, ...children.map((c) => c._id)] }
+            const children = await CategoryModel.find({
+                parentId: categoryId,
+                isActive: true
+            }).select("_id")
+
+            filter.categoryId = {
+                $in: [categoryId, ...children.map((c) => c._id)]
+            }
         }
 
         const allowedSorts = ["newest", "oldest", "mostDownloaded", "relevance"]
         const sortKey = sort === undefined ? (keyword ? "relevance" : "newest") : sort
+
         if (typeof sortKey !== "string" || !allowedSorts.includes(sortKey)) {
             return res.status(400).json({ message: "Invalid sort option" })
         }
 
         let sortBy: Record<string, any>
+
         if (sortKey === "relevance" && keyword) {
             sortBy = { score: { $meta: "textScore" } }
         } else if (sortKey === "oldest") {
@@ -334,24 +400,65 @@ export const listNotes = async (req: Request, res: Response) => {
             NoteModel.countDocuments(filter)
         ])
 
-        res.status(200).json({
+        const noteIds = items.map((note) => note._id)
+
+        const userId = (req as AuthRequest).user?.sub
+
+        const [likeCounts, userLikes] = await Promise.all([
+            LikeModel.aggregate([
+                { $match: { noteId: { $in: noteIds } } },
+                { $group: { _id: "$noteId", totalLikes: { $sum: 1 } } }
+            ]),
+            userId
+                ? LikeModel.find({
+                    noteId: { $in: noteIds },
+                    userId
+                }).select("noteId")
+                : Promise.resolve([])
+        ])
+
+        const likeCountMap = new Map(
+            likeCounts.map((item) => [item._id.toString(), item.totalLikes])
+        )
+
+        const likedNoteIds = new Set(
+            userLikes.map((like) => like.noteId.toString())
+        )
+
+        const notesWithLikes = items.map((note) => ({
+            ...note.toObject(),
+            totalLikes: likeCountMap.get(note._id.toString()) ?? 0,
+            isLiked: likedNoteIds.has(note._id.toString())
+        }))
+
+        return res.status(200).json({
             message: "OK",
-            data: { items, page, limit, total, totalPages: Math.ceil(total / limit) }
+            data: {
+                items: notesWithLikes,
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
         })
     } catch (error) {
         console.error(error)
-        res.status(500).json({ message: "Failed to load notes" })
+        return res.status(500).json({ message: "Failed to load notes" })
     }
 }
 
 export const getNoteById = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
+
         if (typeof id !== "string" || !mongoose.isValidObjectId(id)) {
             return res.status(400).json({ message: "Invalid note id" })
         }
 
-        const note = await NoteModel.findOne({ _id: id, status: NoteStatus.APPROVED })
+        const note = await NoteModel.findOne({
+            _id: id,
+            status: NoteStatus.APPROVED
+        })
             .select("-rejectionReason -file.storageKey")
             .populate("categoryId", "name")
             .populate("uploaderId", "name avatarUrl")
@@ -360,12 +467,29 @@ export const getNoteById = async (req: Request, res: Response) => {
             return res.status(404).json({ message: "Note not found" })
         }
 
-        res.status(200).json({ message: "OK", data: note })
+        const userId = (req as AuthRequest).user?.sub
+
+        const [totalLikes, existingLike] = await Promise.all([
+            LikeModel.countDocuments({ noteId: id }),
+            userId
+                ? LikeModel.exists({ noteId: id, userId })
+                : Promise.resolve(null)
+        ])
+
+        return res.status(200).json({
+            message: "OK",
+            data: {
+                ...note.toObject(),
+                totalLikes,
+                isLiked: !!existingLike
+            }
+        })
     } catch (error) {
         console.error(error)
-        res.status(500).json({ message: "Failed to load note" })
+        return res.status(500).json({ message: "Failed to load note" })
     }
 }
+
 
 export const downloadNote = async (req: AuthRequest, res: Response) => {
     try {
