@@ -212,7 +212,7 @@ export const getPendingNotes = async (req: AuthRequest, res: Response) => {
                 .skip(skip)
                 .limit(limit)
                 .populate("categoryId", "name")
-                .populate("uploaderId", "name email"),
+                .populate("uploaderId", "name email avatarUrl"),
             NoteModel.countDocuments(filter)
         ])
 
@@ -330,7 +330,7 @@ export const listNotes = async (req: Request, res: Response) => {
                 .skip(skip)
                 .limit(limit)
                 .populate("categoryId", "name")
-                .populate("uploaderId", "name"),
+                .populate("uploaderId", "name avatarUrl"),
             NoteModel.countDocuments(filter)
         ])
 
@@ -354,7 +354,7 @@ export const getNoteById = async (req: Request, res: Response) => {
         const note = await NoteModel.findOne({ _id: id, status: NoteStatus.APPROVED })
             .select("-rejectionReason -file.storageKey")
             .populate("categoryId", "name")
-            .populate("uploaderId", "name")
+            .populate("uploaderId", "name avatarUrl")
 
         if (!note) {
             return res.status(404).json({ message: "Note not found" })

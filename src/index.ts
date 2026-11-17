@@ -13,6 +13,7 @@ import AuthRouter from "./routes/auth.routers"
 import AdminRouter from "./routes/admin.routes"
 import categoryRouter from "./routes/category.routes"
 import NoteRouter from "./routes/note.routes"
+import userRoutes from "./routes/user.routes"
 
 
 const MONGO_URL = process.env.MONGO_URL || ""
@@ -32,6 +33,8 @@ app.use("/api/v1/auth", AuthRouter)
 app.use("/api/v1/admin", AdminRouter)
 app.use("/api/v1/categories", categoryRouter)
 app.use("/api/v1/notes", NoteRouter) 
+app.use("/api/v1/users", userRoutes)
+
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ message: "Route not found" })
