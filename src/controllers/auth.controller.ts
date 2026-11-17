@@ -6,6 +6,7 @@ import { AuthRequest } from "../middleware/auth"
 import { createHash, randomBytes } from "node:crypto"
 import { sendPasswordResetEmail } from "../services/email.service"
 import { allowRequest } from "../util/rateLimit"
+import { saveAvatarFile, deleteAvatarFile } from "../services/storage.service"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -82,7 +83,8 @@ export const login = async (req: Request, res: Response) => {
                     id: user._id,
                     name: user.name,
                     email: user.email,
-                    roles: user.roles
+                    roles: user.roles,
+                    avatarUrl: user.avatarUrl ?? null
                 },
                 accessToken: signAccessToken(user),
                 refreshToken: signRefreshToken(user)
@@ -126,7 +128,7 @@ export const me = async (req: AuthRequest, res: Response) => {
 
         res.status(200).json({
             message: "OK",
-            data: { id: user._id, name: user.name, email: user.email, roles: user.roles }
+            data: { id: user._id, name: user.name, email: user.email, roles: user.roles, avatarUrl: user.avatarUrl ?? null }
         })
     } catch (error) {
         console.error(error)
@@ -197,7 +199,7 @@ export const updateMyProfile = async (req: AuthRequest, res: Response) => {
 
         res.status(200).json({
             message: "Profile updated successfully",
-            data: { id: user._id, name: user.name, email: user.email, roles: user.roles }
+            data: { id: user._id, name: user.name, email: user.email, roles: user.roles, avatarUrl: user.avatarUrl ?? null }
         })
     } catch (error: any) {
         if (error?.code === 11000) {
@@ -337,5 +339,104 @@ export const resetPassword = async (req: Request, res: Response) => {
     } catch (error) {
         console.error(error)
         res.status(500).json({ message: "Could not reset your password" })
+    }
+}
+
+export const updateMyAvatar = async (req: AuthRequest, res: Response) => {
+    let uploadedKey: string | null = null
+    let committed = false
+
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: "An image file is required" })
+        }
+
+        const user = await UserModel.findById(req.user?.sub).select("+avatarKey")
+        if (!user) {
+            return res.status(404).json({ message: "User not found" })
+        }
+
+        const uploaded = await saveAvatarFile(req.file, String(user._id))
+        uploadedKey = uploaded.key
+        const oldKey = user.avatarKey
+
+        await UserModel.updateOne(
+            { _id: user._id },
+            { $set: { avatarUrl: uploaded.url, avatarKey: uploaded.key } },
+            { timestamps: false }
+        )
+        committed = true
+
+        if (oldKey) {
+            try {
+                await deleteAvatarFile(oldKey)
+            } catch (cleanupError) {
+                console.error(cleanupError)
+            }
+        }
+
+        res.status(200).json({
+            message: "Profile photo updated",
+            data: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                roles: user.roles,
+                avatarUrl: uploaded.url
+            }
+        })
+    } catch (error) {
+        if (uploadedKey && !committed) {
+            try {
+                await deleteAvatarFile(uploadedKey)
+            } catch (cleanupError) {
+                console.error(cleanupError)
+            }
+        }
+
+        const code = error instanceof Error ? error.message : ""
+
+        if (code === "INVALID_IMAGE") {
+            return res.status(400).json({ message: "File is not a valid JPG, PNG or WebP image" })
+        }
+        if (code === "STORAGE_UPLOAD_FAILED") {
+            return res.status(502).json({ message: "Could not store the photo. Please try again." })
+        }
+
+        console.error(error)
+        res.status(500).json({ message: "Failed to update profile photo" })
+    }
+}
+
+export const removeMyAvatar = async (req: AuthRequest, res: Response) => {
+    try {
+        const user = await UserModel.findById(req.user?.sub).select("+avatarKey")
+        if (!user) {
+            return res.status(404).json({ message: "User not found" })
+        }
+
+        const oldKey = user.avatarKey
+
+        await UserModel.updateOne(
+            { _id: user._id },
+            { $unset: { avatarUrl: "", avatarKey: "" } },
+            { timestamps: false }
+        )
+
+        if (oldKey) {
+            try {
+                await deleteAvatarFile(oldKey)
+            } catch (cleanupError) {
+                console.error(cleanupError)
+            }
+        }
+
+        res.status(200).json({
+            message: "Profile photo removed",
+            data: { id: user._id, name: user.name, email: user.email, roles: user.roles, avatarUrl: null }
+        })
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ message: "Failed to remove profile photo" })
     }
 }

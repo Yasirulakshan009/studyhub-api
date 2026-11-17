@@ -21,3 +21,4 @@ export const getSupabase = (): SupabaseClient => {
 }
 
 export const getBucketName = (): string => process.env.SUPABASE_BUCKET || "notes"
+export const getAvatarBucketName = (): string => process.env.SUPABASE_AVATAR_BUCKET || "avatars"

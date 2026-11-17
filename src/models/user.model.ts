@@ -12,6 +12,8 @@ export interface IUser extends Document {
     roles: UserRole[]
     passwordResetTokenHash?: string
     passwordResetExpires?: Date
+    avatarUrl?: string
+    avatarKey?: string
 }
 
 const userSchema = new Schema<IUser>(
@@ -25,7 +27,9 @@ const userSchema = new Schema<IUser>(
           default: [UserRole.STUDENT]
         },
         passwordResetTokenHash: { type: String, select: false },
-        passwordResetExpires: { type: Date, select: false }
+        passwordResetExpires: { type: Date, select: false },
+        avatarUrl: { type: String },
+        avatarKey: { type: String, select: false }
     },
     { timestamps: true}    
 )
