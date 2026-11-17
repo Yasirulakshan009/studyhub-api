@@ -7,6 +7,8 @@ export interface IMessage extends Document {
     receiverId: Types.ObjectId
     text: string
     readAt?: Date | null
+    createdAt?: Date
+    updatedAt?: Date
 }
 
 const messageSchema = new Schema<IMessage>(
