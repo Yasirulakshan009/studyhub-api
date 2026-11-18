@@ -374,3 +374,97 @@ export const markMessagesAsRead = async (
         })
     }
 }
+
+
+export const deleteMessage = async (
+    req: AuthRequest,
+    res: Response
+) => {
+    try {
+        const userId = getUserId(req)
+
+        if (!userId) {
+            return res.status(401).json({
+                message: "Unauthorized"
+            })
+        }
+
+        const { conversationId, messageId } = req.params
+
+        if (
+            typeof conversationId !== "string" ||
+            !mongoose.isValidObjectId(conversationId) ||
+            typeof messageId !== "string" ||
+            !mongoose.isValidObjectId(messageId)
+        ) {
+            return res.status(400).json({
+                message: "Invalid conversation or message id"
+            })
+        }
+
+        const conversation = await ConversationModel.findOne({
+            _id: conversationId,
+            participants: userId
+        })
+
+        if (!conversation) {
+            return res.status(404).json({
+                message: "Conversation not found"
+            })
+        }
+
+        const message = await MessageModel.findOneAndDelete({
+            _id: messageId,
+            conversationId,
+            senderId: userId
+        })
+
+        if (!message) {
+            return res.status(404).json({
+                message: "Message not found or you cannot delete this message"
+            })
+        }
+
+        const latestMessage = await MessageModel.findOne({
+            conversationId
+        }).sort({ createdAt: -1 })
+
+        conversation.lastMessage = latestMessage?.text ?? ""
+        conversation.lastMessageAt = latestMessage?.createdAt
+        await conversation.save()
+
+        io.to(`conversation:${conversationId}`).emit(
+            "message:deleted",
+            {
+                conversationId,
+                messageId,
+                deletedBy: userId
+            }
+        )
+
+        io.to(`user:${conversation.participants[0].toString()}`).emit(
+            "notification:new",
+            { conversationId }
+        )
+
+        io.to(`user:${conversation.participants[1].toString()}`).emit(
+            "notification:new",
+            { conversationId }
+        )
+
+        return res.status(200).json({
+            message: "Message deleted successfully",
+            data: {
+                messageId,
+                conversationId
+            }
+        })
+    } catch (error) {
+        console.error(error)
+
+        return res.status(500).json({
+            message: "Failed to delete message"
+        })
+    }
+}
+
