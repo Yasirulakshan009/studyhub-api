@@ -68,8 +68,21 @@ const noteSchema = new Schema<INote>(
 )
 
 noteSchema.index(
-    { title: "text", description: "text", tags: "text" },
-    { weights: { title: 5, tags: 3, description: 1 }, name: "note_text_search" }
+    {
+        title: "text",
+        subject: "text",
+        description: "text",
+        tags: "text"
+    },
+    {
+        weights: {
+            title: 5,
+            subject: 4,
+            tags: 3,
+            description: 1
+        },
+        name: "note_text_search"
+    }
 )
 
 noteSchema.index({ status: 1, createdAt: -1 })
